@@ -1,0 +1,3 @@
+[console_scripts]
+ethicaldrm = ethicaldrm.cli:main
+ethicaldrm-api = ethicaldrm.api.app:main

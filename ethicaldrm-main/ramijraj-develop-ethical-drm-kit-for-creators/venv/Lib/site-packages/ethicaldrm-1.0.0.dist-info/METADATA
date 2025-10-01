@@ -1,0 +1,69 @@
+Metadata-Version: 2.4
+Name: ethicaldrm
+Version: 1.0.0
+Summary: Ethical Digital Rights Management Kit for Indie Creators
+Home-page: https://github.com/ramijraj/ethicaldrm
+Author: Ramij Raj
+Author-email: ramijraj.ethicaldrm@proton.me
+Project-URL: Bug Reports, https://github.com/ramijraj/ethicaldrm/issues
+Project-URL: Source, https://github.com/ramijraj/ethicaldrm
+Project-URL: Documentation, https://github.com/ramijraj/ethicaldrm/wiki
+Keywords: drm,watermarking,leak-detection,content-protection,piracy-detection,video-watermarking,indie-creators,ethical-drm
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Intended Audience :: Education
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Topic :: Multimedia :: Video
+Classifier: Topic :: Security
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: opencv-python>=4.8.0
+Requires-Dist: numpy>=1.24.0
+Requires-Dist: Pillow>=10.0.0
+Requires-Dist: ffmpeg-python>=0.2.0
+Requires-Dist: imagehash>=4.3.1
+Requires-Dist: flask>=2.3.0
+Requires-Dist: requests>=2.31.0
+Requires-Dist: telethon>=1.28.0
+Requires-Dist: psutil>=5.9.0
+Requires-Dist: cryptography>=41.0.0
+Requires-Dist: pymongo>=4.5.0
+Requires-Dist: pytest>=7.4.0
+Requires-Dist: python-dotenv>=1.0.0
+Requires-Dist: beautifulsoup4>=4.12.0
+Requires-Dist: schedule>=1.2.0
+Requires-Dist: python-magic>=0.4.27
+Requires-Dist: tqdm>=4.65.0
+Requires-Dist: aiohttp>=3.8.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.4.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.1.0; extra == "dev"
+Requires-Dist: black>=23.0.0; extra == "dev"
+Requires-Dist: flake8>=6.0.0; extra == "dev"
+Requires-Dist: mypy>=1.5.0; extra == "dev"
+Provides-Extra: api
+Requires-Dist: gunicorn>=21.2.0; extra == "api"
+Requires-Dist: flask-cors>=4.0.0; extra == "api"
+Provides-Extra: telegram
+Requires-Dist: telethon>=1.28.0; extra == "telegram"
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: home-page
+Dynamic: keywords
+Dynamic: project-url
+Dynamic: provides-extra
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
+EthicalDRM - Ethical Digital Rights Management Kit for Indie Creators

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ethical DRM - File Watermarking</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-gray-900 to-black text-gray-200 min-h-screen flex items-center justify-center p-6">
+  <div class="w-full max-w-lg bg-gray-800/60 p-8 rounded-2xl shadow-2xl border border-gray-700">
+    <h1 class="text-2xl font-bold text-center mb-6 text-purple-400">🔒 Ethical DRM</h1>
+    <p class="text-center mb-4 text-sm text-gray-400">Embed a secure watermark into your file</p>
+
+    <div 
+      id="drop-zone" 
+      class="upload-box border-2 border-dashed border-gray-600 rounded-xl flex flex-col items-center justify-center p-8 cursor-pointer text-gray-400 hover:border-purple-400 transition"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 mb-2 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 12v9m0-9l-3-3m3 3l3-3m-6 0h6" />
+      </svg>
+      <p id="file-label">Drag & drop or click to browse files</p>
+      <input type="file" id="file" name="file" required class="hidden"/>
+    </div>
+
+    <div class="mt-6">
+      <label for="userId" class="block text-sm mb-2 text-gray-300">User ID</label>
+      <input 
+        type="text" 
+        id="userId" 
+        name="userId" 
+        placeholder="Enter your ID" 
+        class="w-full p-3 rounded-lg bg-gray-700 border border-gray-600 focus:border-purple-400 focus:ring-1 focus:ring-purple-400 outline-none"
+        required
+      />
+    </div>
+    
+    <div class="text-center mt-4">
+      <a href="/history" class="text-sm text-purple-400 hover:text-purple-300 transition">View History & Run Leakbot Scanner &rarr;</a>
+    </div>
+
+    <button 
+      id="uploadBtn" 
+      class="w-full mt-6 py-3 rounded-lg bg-purple-600 hover:bg-purple-700 font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      Watermark File
+    </button>
+
+    <div id="result" class="mt-6 hidden p-4 rounded-lg border border-gray-600 bg-gray-700/40"></div>
+  </div>
+
+  <script>
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file');
+    const fileLabel = document.getElementById('file-label');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const resultBox = document.getElementById('result');
+    const userIdInput = document.getElementById('userId');
+
+    let selectedFile = null;
+
+    // Handle click → open file picker
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    // Handle file select via browse
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length > 0) {
+        selectedFile = fileInput.files[0];
+        fileLabel.textContent = `Selected: ${selectedFile.name}`;
+        fileLabel.classList.add("text-cyan-400");
+      }
+    });
+
+    // Drag & drop highlight
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('bg-purple-900/30');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('bg-purple-900/30');
+    });
+
+    // Drop file
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('bg-purple-900/30');
+
+      if (e.dataTransfer.files.length > 0) {
+        selectedFile = e.dataTransfer.files[0];
+        fileInput.files = e.dataTransfer.files; // This makes sure the input element has the file
+        fileLabel.textContent = `Selected: ${selectedFile.name}`;
+        fileLabel.classList.add("text-cyan-400");
+      }
+    });
+
+    // Handle Upload
+    uploadBtn.addEventListener('click', async () => {
+      if (!selectedFile || !userIdInput.value) {
+        alert("Please select a file and enter your User ID.");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      
+      // *** FIX #1: Send "user_id" (snake_case) to match our Python API ***
+      formData.append("user_id", userIdInput.value);
+
+      uploadBtn.disabled = true;
+      uploadBtn.innerHTML = `
+        <div class="flex items-center justify-center">
+          <svg class="animate-spin h-5 w-5 mr-3" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          Watermarking...
+        </div>
+      `;
+      resultBox.classList.add("hidden");
+
+
+      try {
+        const res = await fetch("/watermark/embed", {
+          method: "POST",
+          body: formData,
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+           // This will show the error message from the backend (like "Watermarking failed")
+           throw new Error(data.error || "A server error occurred.");
+        }
+
+        resultBox.classList.remove("hidden");
+
+        // *** FIX #2 & #3: Use "data.signature" (not watermarkId) AND add the "data.download_url" link ***
+        resultBox.innerHTML = `
+          <p class="text-green-400 font-semibold">✅ Watermarking successful!</p>
+          <p class="mt-2 text-sm text-gray-300">Signature: <span class="font-mono">${data.signature}</span></p>
+          <p class="mt-2 text-sm text-gray-300">Your file is ready:</p>
+          <a href="${data.download_url}" 
+             class="block w-full text-center mt-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold transition" 
+             download> Download Watermarked File
+          </a>
+        `;
+      } catch (err) {
+        resultBox.classList.remove("hidden");
+        resultBox.innerHTML = `
+          <p class="text-red-400 font-semibold">❌ Error:</p>
+          <p class="mt-2 text-sm text-gray-300 font-mono">${err.message}</p>
+        `;
+      } finally {
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = "Watermark File";
+      }
+    });
+  </script>
+</body>
+</html>
+
+
+
+
