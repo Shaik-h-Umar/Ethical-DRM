@@ -4,6 +4,23 @@ except ImportError:
     from core.hashing import hash_video
 
 
+PHASH_MAX_DISTANCE = 10
+
+
+def _hamming_distance_hex(hash_a: str, hash_b: str) -> int | None:
+    """Return bit Hamming distance for two hex pHash strings, else None."""
+    if not hash_a or not hash_b or len(hash_a) != len(hash_b):
+        return None
+
+    try:
+        value_a = int(hash_a, 16)
+        value_b = int(hash_b, 16)
+    except ValueError:
+        return None
+
+    return (value_a ^ value_b).bit_count()
+
+
 def get_video_hashes(video_path: str, sample_every_n: int = 30) -> list:
     """Backward-compatible alias used by existing app code."""
     _ = sample_every_n
@@ -31,7 +48,6 @@ def detect_leak(leaked_video_path: str, database: list) -> tuple[str | None, flo
     leaked_set = set(leaked_hashes)
 
     if not leaked_set:
-        print("No hashes generated from leaked video.")
         return None, 0.0
 
     best_user = None
@@ -40,9 +56,23 @@ def detect_leak(leaked_video_path: str, database: list) -> tuple[str | None, flo
     for record in database:
         user_id = record.get("user_id")
         stored_hashes = record.get("hashes", [])
+        stored_set = set(stored_hashes)
 
-        match_count = len(leaked_set.intersection(set(stored_hashes)))
-        print(f"[DEBUG] user_id={user_id}, matches={match_count}")
+        # Fast path for exact matches.
+        exact_count = len(leaked_set.intersection(stored_set))
+        match_count = exact_count
+
+        # Fuzzy path for re-encoded uploads (hosting platforms often transcode).
+        if match_count < len(leaked_set):
+            for leaked_hash in leaked_set:
+                if leaked_hash in stored_set:
+                    continue
+
+                for stored_hash in stored_set:
+                    distance = _hamming_distance_hex(leaked_hash, stored_hash)
+                    if distance is not None and distance <= PHASH_MAX_DISTANCE:
+                        match_count += 1
+                        break
 
         if match_count > best_count:
             best_count = match_count
@@ -51,11 +81,6 @@ def detect_leak(leaked_video_path: str, database: list) -> tuple[str | None, flo
     confidence = (best_count / len(leaked_set)) * 100 if leaked_set else 0.0
 
     if best_user:
-        print(
-            f"[INFO] Leak matched: user_id={best_user}, "
-            f"match_count={best_count}, confidence={confidence:.2f}%"
-        )
         return best_user, confidence
 
-    print("[INFO] No matching user found above threshold.")
     return None, 0.0

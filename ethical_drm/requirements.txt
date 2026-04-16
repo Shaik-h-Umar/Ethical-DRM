@@ -4,3 +4,5 @@ Pillow
 ImageHash
 google-genai
 streamlit
+requests
+beautifulsoup4

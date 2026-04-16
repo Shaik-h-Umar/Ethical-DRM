@@ -124,9 +124,9 @@ def main() -> None:
 
 	# 6: detect leak
 	print_step(6, "Detecting leaked video and identifying user")
-	detected_user = detector.detect_leak(str(leaked_copy), fake_database)
+	detected_user, confidence = detector.detect_leak(str(leaked_copy), fake_database)
 	if detected_user:
-		print(f"Detected responsible user: {detected_user}")
+		print(f"Detected responsible user: {detected_user} (confidence: {confidence:.2f}%)")
 	else:
 		print("No user detected from leaked video.")
 

@@ -1,5 +1,14 @@
 import os
-from google import genai
+
+try:
+    from google import genai as google_genai
+except ImportError:
+    google_genai = None
+
+try:
+    import google.generativeai as legacy_genai
+except ImportError:
+    legacy_genai = None
 
 
 def generate_dmca_notice(user_id: str) -> str:
@@ -15,11 +24,9 @@ def generate_dmca_notice(user_id: str) -> str:
     # --- API configuration ---
     # Set your key before running:
     # export GEMINI_API_KEY="your_api_key"
-    api_key = os.getenv("AIzaSyDUdiO1pH2Ap8PlyKJLym9XDP-Aa8JLz7I") or os.getenv("AIzaSyDUdiO1pH2Ap8PlyKJLym9XDP-Aa8JLz7I")
+    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not api_key:
         raise ValueError("Missing GEMINI_API_KEY environment variable.")
-
-    client = genai.Client(api_key=api_key)
 
     prompt = f"""
 Generate an AI incident report in the exact style below.
@@ -47,13 +54,24 @@ If a value is unknown (for example URL), use: N/A
 """
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
-        )
+        if google_genai is not None:
+            client = google_genai.Client(api_key=api_key)
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=prompt,
+            )
+            text = getattr(response, "text", None)
+        elif legacy_genai is not None:
+            legacy_genai.configure(api_key=api_key)
+            model = legacy_genai.GenerativeModel("gemini-1.5-flash")
+            response = model.generate_content(prompt)
+            text = getattr(response, "text", None)
+        else:
+            raise RuntimeError(
+                "No supported Gemini SDK found. Install google-genai or google-generativeai."
+            )
 
         # Basic guard in case response structure is empty
-        text = getattr(response, "text", None)
         if not text:
             raise RuntimeError("Gemini returned an empty response.")
 

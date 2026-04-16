@@ -14,8 +14,8 @@ from auth import (
 from database.db import init_db
 from ai.dmca_generator import generate_dmca_notice
 from core import detector, hashing, watermark
+from core.crawler import scan_url, scan_platforms
 
-import streamlit as st
 from database.debug_db import debug_database
 
 if st.button("Debug DB"):
@@ -427,7 +427,10 @@ def section_detect(dirs: dict) -> None:
                     st.session_state.confidence = max(confidence, detector_confidence / 100)
 
                     if st.session_state.detected_user:
-                        st.success("Leak Detected")
+                        if st.session_state.confidence < 0.3:
+                            st.warning("Low confidence match. Possible false positive.")
+                        else:
+                            st.success(f"Leak detected: {st.session_state.detected_user}")
                     else:
                         st.warning("No Leak Detected")
                 except Exception as exc:
@@ -478,6 +481,148 @@ def section_report() -> None:
             mime="text/plain",
             use_container_width=True,
         )
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def section_web_leak_scanner() -> None:
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
+    st.markdown("### 🌐 Web Leak Scanner")
+    st.caption("Scan a webpage for media files and verify potential leaks.")
+
+    scan_target_url = st.text_input(
+        "Enter URL to scan",
+        placeholder="https://example.com",
+        key="web_scanner_url",
+    )
+
+    action_col1, action_col2 = st.columns(2)
+    with action_col1:
+        scan_clicked = st.button("🔎 Scan URL", use_container_width=True)
+    with action_col2:
+        demo_clicked = st.button("🎬 Demo Mode", use_container_width=True)
+
+    if scan_clicked:
+        if not scan_target_url.strip():
+            st.warning("Please enter a valid URL")
+        else:
+            results = []
+            try:
+                with st.spinner("Crawling and scanning..."):
+                    raw_results = scan_url(scan_target_url.strip(), st.session_state.fake_db)
+                if isinstance(raw_results, list):
+                    results = raw_results
+            except Exception:
+                results = []
+
+            if not results:
+                st.info("Crawler found no leaks, running internal scan...")
+                try:
+                    fallback_results = scan_platforms(st.session_state.fake_db)
+                    if isinstance(fallback_results, list):
+                        results = fallback_results
+                except Exception:
+                    results = []
+
+            if results:
+                st.success(f"✅ Detected {len(results)} leak(s)")
+                st.markdown("")
+
+                for item in results:
+                    platform = item.get("platform", "Web")
+                    confidence = float(item.get("confidence", 0) or 0)
+                    source_url = item.get("url", "-")
+
+                    if confidence > 80:
+                        risk_color = "#ff4d4f"
+                        risk_label = "High Risk"
+                    elif confidence >= 50:
+                        risk_color = "#f4c430"
+                        risk_label = "Medium Risk"
+                    else:
+                        risk_color = "#2ecc71"
+                        risk_label = "Low Risk"
+
+                    st.markdown(
+                        f"""
+                        <div style="
+                            border:1px solid rgba(255,255,255,0.12);
+                            border-left:6px solid {risk_color};
+                            border-radius:12px;
+                            padding:14px;
+                            margin:10px 0;
+                            background:rgba(255,255,255,0.03);
+                        ">
+                            <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+                                <div>
+                                    <div style="font-size:1.05rem;font-weight:700;">🛡️ Leak Found</div>
+                                    <div style="opacity:0.9;">Platform: <strong>{platform}</strong></div>
+                                </div>
+                                <div style="color:{risk_color};font-weight:700;">{risk_label}</div>
+                            </div>
+                            <div style="margin-top:8px;"><strong>URL:</strong> {source_url}</div>
+                            <div style="margin-top:6px;"><strong>Confidence:</strong> {confidence:.2f}%</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+                    st.progress(int(max(0, min(100, confidence))))
+                    st.markdown("")
+            else:
+                st.warning("No leaks detected or no media found")
+
+    if demo_clicked:
+        with st.spinner("Scanning platforms..."):
+            demo_results = []
+            try:
+                fallback_results = scan_platforms(st.session_state.fake_db)
+                if isinstance(fallback_results, list):
+                    demo_results = fallback_results
+            except Exception:
+                demo_results = []
+
+        telegram_result = None
+        for item in demo_results:
+            if item.get("platform") == "Telegram":
+                telegram_result = item
+                break
+
+        demo_match = telegram_result
+        if demo_match is None and demo_results:
+            demo_match = max(
+                demo_results,
+                key=lambda item: float(item.get("confidence", 0) or 0),
+            )
+
+        if demo_match:
+            demo_platform = demo_match.get("platform", "Web")
+            demo_confidence = float(demo_match.get("confidence", 0) or 0)
+            demo_url = demo_match.get("url", "N/A")
+
+            st.success(f"Leak detected on {demo_platform}")
+            st.markdown(
+                f"""
+                <div style="
+                    margin-top:10px;
+                    border:1px solid rgba(255,255,255,0.15);
+                    border-left:6px solid #ff4d4f;
+                    border-radius:12px;
+                    padding:14px;
+                    background:linear-gradient(135deg, rgba(255,77,79,0.18), rgba(16,24,40,0.35));
+                ">
+                    <div style="font-size:1.05rem;font-weight:700;">🚨 Demo Leak Match</div>
+                    <div style="margin-top:6px;"><strong>Platform:</strong> {demo_platform}</div>
+                    <div style="margin-top:4px;"><strong>Confidence:</strong> {demo_confidence:.0f}%</div>
+                    <div style="margin-top:4px;"><strong>Source:</strong> {demo_url}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.info(f"Confidence: {demo_confidence:.0f}%")
+            st.progress(int(max(0, min(100, demo_confidence))))
+        else:
+            st.warning("Demo mode did not find any real leak match.")
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -563,22 +708,23 @@ def section_image_report() -> None:
 
     if st.button("Generate Image DMCA Report"):
         try:
-            user = st.session_state.user_id
+            user = st.session_state.image_detected_user or st.session_state.user_id
             notice = generate_dmca_notice(user)
             st.session_state.image_dmca = notice
         except Exception:
+            user = st.session_state.image_detected_user or st.session_state.user_id
             st.session_state.image_dmca = f"""
 NOTICE OF COPYRIGHT INFRINGEMENT (DMCA)
 
 This notice is regarding unauthorized distribution of protected image content.
 
-Detected User ID: {st.session_state.user_id}
+Detected User ID: {user}
 
 The image contains an embedded forensic watermark identifying the responsible user.
 
 Action Requested:
-- Immediate removal of the infringing content
-- Investigation of the source
+- Immediate removal of the infringing content.
+- Investigation  of the source.
 
 """
 
@@ -599,6 +745,7 @@ def render_dashboard(dirs: dict) -> None:
     section_protect(dirs)
     section_detect(dirs)
     section_report()
+    section_web_leak_scanner()
 
 
 def main() -> None:
