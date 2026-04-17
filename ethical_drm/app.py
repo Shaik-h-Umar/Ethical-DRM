@@ -189,6 +189,31 @@ def inject_styles() -> None:
             color: #dceffd;
             line-height: 1.45;
         }
+        .stTabs {
+            --auth-size: min(90vw, 520px);
+            width: var(--auth-size);
+            margin: 0.75rem auto 0 auto;
+            border: 1px solid rgba(118, 208, 255, 0.28);
+            border-radius: 16px;
+            padding: 14px;
+            background: linear-gradient(145deg, rgba(16, 29, 46, 0.92), rgba(8, 15, 27, 0.9));
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        }
+        .stTabs [role="tabpanel"] {
+            min-height: calc(var(--auth-size) - 100px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        @media (max-width: 640px) {
+            .stTabs {
+                --auth-size: min(94vw, 420px);
+                padding: 12px;
+            }
+            .stTabs [role="tabpanel"] {
+                min-height: calc(var(--auth-size) - 86px);
+            }
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -496,11 +521,7 @@ def section_web_leak_scanner() -> None:
         key="web_scanner_url",
     )
 
-    action_col1, action_col2 = st.columns(2)
-    with action_col1:
-        scan_clicked = st.button("🔎 Scan URL", use_container_width=True)
-    with action_col2:
-        demo_clicked = st.button("🎬 Demo Mode", use_container_width=True)
+    scan_clicked = st.button("Scan URL", use_container_width=True)
 
     if scan_clicked:
         if not scan_target_url.strip():
@@ -571,58 +592,6 @@ def section_web_leak_scanner() -> None:
                     st.markdown("")
             else:
                 st.warning("No leaks detected or no media found")
-
-    if demo_clicked:
-        with st.spinner("Scanning platforms..."):
-            demo_results = []
-            try:
-                fallback_results = scan_platforms(st.session_state.fake_db)
-                if isinstance(fallback_results, list):
-                    demo_results = fallback_results
-            except Exception:
-                demo_results = []
-
-        telegram_result = None
-        for item in demo_results:
-            if item.get("platform") == "Telegram":
-                telegram_result = item
-                break
-
-        demo_match = telegram_result
-        if demo_match is None and demo_results:
-            demo_match = max(
-                demo_results,
-                key=lambda item: float(item.get("confidence", 0) or 0),
-            )
-
-        if demo_match:
-            demo_platform = demo_match.get("platform", "Web")
-            demo_confidence = float(demo_match.get("confidence", 0) or 0)
-            demo_url = demo_match.get("url", "N/A")
-
-            st.success(f"Leak detected on {demo_platform}")
-            st.markdown(
-                f"""
-                <div style="
-                    margin-top:10px;
-                    border:1px solid rgba(255,255,255,0.15);
-                    border-left:6px solid #ff4d4f;
-                    border-radius:12px;
-                    padding:14px;
-                    background:linear-gradient(135deg, rgba(255,77,79,0.18), rgba(16,24,40,0.35));
-                ">
-                    <div style="font-size:1.05rem;font-weight:700;">🚨 Demo Leak Match</div>
-                    <div style="margin-top:6px;"><strong>Platform:</strong> {demo_platform}</div>
-                    <div style="margin-top:4px;"><strong>Confidence:</strong> {demo_confidence:.0f}%</div>
-                    <div style="margin-top:4px;"><strong>Source:</strong> {demo_url}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.info(f"Confidence: {demo_confidence:.0f}%")
-            st.progress(int(max(0, min(100, demo_confidence))))
-        else:
-            st.warning("Demo mode did not find any real leak match.")
 
     st.markdown("</div>", unsafe_allow_html=True)
 

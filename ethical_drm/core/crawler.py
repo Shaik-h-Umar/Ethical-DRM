@@ -6,6 +6,7 @@ import re
 import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
+from urllib.parse import urljoin
 from uuid import uuid4
 
 import requests
@@ -18,8 +19,10 @@ except ImportError:
 
 
 ALLOWED_MEDIA_EXTENSIONS = (".mp4", ".jpg", ".png")
+MEDIA_PATH_HINTS = ("video", "stream", "media", "file", "photo", "image")
 REQUEST_TIMEOUT_SECONDS = 8
 MAX_SCAN_LINKS = 5
+MIN_DETECTION_CONFIDENCE = 25.0
 REQUEST_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (X11; Linux x86_64) "
@@ -51,6 +54,30 @@ def _has_media_extension(link: str) -> bool:
     return any(ext in path for ext in ALLOWED_MEDIA_EXTENSIONS)
 
 
+def _is_probable_media_link(link: str, *, tag_name: str | None = None) -> bool:
+    """Heuristic matcher for media links where file extensions may be hidden."""
+    if not _is_valid_http_url(link):
+        return False
+
+    if _has_media_extension(link):
+        return True
+
+    parsed = urlparse(link)
+    lower_path = parsed.path.lower()
+    lower_query = parsed.query.lower()
+    host = parsed.netloc.lower()
+
+    if tag_name in {"video", "source", "img"}:
+        return True
+    if any(hint in lower_path for hint in MEDIA_PATH_HINTS):
+        return True
+    if any(token in lower_query for token in ("mime=video", "mime=image", "format=mp4")):
+        return True
+    if "telegram" in host or "t.me" in host:
+        return any(hint in lower_path for hint in ("video", "file", "stream"))
+    return False
+
+
 def _normalize_media_url(url: str) -> str:
     """Normalize encoded URL variants commonly found in script/meta blobs."""
     cleaned = html.unescape(url.strip())
@@ -65,7 +92,7 @@ def _extract_media_from_text(html_text: str) -> set[str]:
     results: set[str] = set()
     for candidate in matches:
         normalized = _normalize_media_url(candidate)
-        if _is_valid_http_url(normalized) and _has_media_extension(normalized):
+        if _is_probable_media_link(normalized):
             results.add(normalized)
     return results
 
@@ -105,19 +132,22 @@ def crawl_for_media(url: str) -> list[str]:
             continue
 
         candidate = _normalize_media_url(candidate)
-        if not _is_valid_http_url(candidate):
+        resolved = _normalize_media_url(urljoin(url, candidate))
+        if not _is_valid_http_url(resolved):
             continue
 
-        if _has_media_extension(candidate):
-            media_links.add(candidate)
+        if _is_probable_media_link(resolved, tag_name=tag.name):
+            media_links.add(resolved)
 
     # Some platforms expose media via meta tags rather than visible anchors.
     for meta in soup.find_all("meta"):
         candidate = _normalize_media_url(meta.get("content") or "")
         if not candidate:
             continue
-        if _is_valid_http_url(candidate) and _has_media_extension(candidate):
-            media_links.add(candidate)
+        resolved = _normalize_media_url(urljoin(url, candidate))
+        property_name = (meta.get("property") or meta.get("name") or "").lower()
+        if _is_probable_media_link(resolved) or property_name in {"og:video", "og:image"}:
+            media_links.add(resolved)
 
     # Fallback extraction for links embedded in script blobs.
     media_links.update(_extract_media_from_text(response.text))
@@ -154,14 +184,21 @@ def download_file(url: str, filename: str) -> str | None:
     return str(temp_path)
 
 
-def detect_platform(url: str) -> str:
+def detect_platform(url: str, source_url: str | None = None) -> str:
     """Infer source platform name from URL."""
     lowered = url.lower()
+    source_lowered = (source_url or "").lower()
     if "t.me" in lowered:
+        return "Telegram"
+    if "t.me" in source_lowered:
         return "Telegram"
     if "youtube" in lowered:
         return "YouTube"
+    if "youtube" in source_lowered:
+        return "YouTube"
     if "drive.google.com" in lowered:
+        return "Google Drive"
+    if "drive.google.com" in source_lowered:
         return "Google Drive"
     return "Web"
 
@@ -193,10 +230,10 @@ def scan_url(url: str, database: list) -> list[dict]:
             raw_result = detect_leak(local_path, database)
             user, confidence = _normalize_detector_result(raw_result)
 
-            if user and confidence > 60:
+            if user and confidence >= MIN_DETECTION_CONFIDENCE:
                 findings.append(
                     {
-                        "platform": detect_platform(media_url),
+                        "platform": detect_platform(media_url, source_url=url),
                         "url": media_url,
                         "user": user,
                         "confidence": round(confidence, 2),
